@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Weather Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+    crossorigin="anonymous">
+</head>
+
+<body style="background-image: url('cloud.webp');background-position: center; background-repeat: no-repeat;height: 100vh;width: 100%;">
+  <div class="container mt-3 rounded shadow">
+    <h1 class="text-center p-4 shadow text-white mt-2" style="text-shadow: 1px 1px 10px skyblue;">🌦️ Weather Dashboard 🌦️</h1>
+    <div class="shadow p-4 mb-3">
+      <input type="search" id="cityInput" class="form-control mb-2" placeholder="Enter city name">
+      <div class="d-flex p-1">
+        <button id="searchBtn" style="background-color: rgb(0, 162, 255);" class="btn fw-bold me-3 w-50 shadow">Search</button>
+        <button id="locBtn" class="btn fw-bold w-50 shadow" style="background-color: rgb(179, 224, 0);">📍 Use My Location</button>
+      </div>
+      <p id="status" style="font-family: Arial, Helvetica, sans-serif; color: white;"></p>
+
+      <!-- Current Weather -->
+      <div id="weather" class="text-white p-4 shadow">
+        <h3 id="locationName"></h3>
+        <p><span class="fw-bold">Temperature:</span> <span id="curTemp"></span></p>
+        <p><span class="fw-bold">Condition:</span> <span id="curDesc"></span></p>
+        <p><span class="fw-bold">Humidity:</span> <span id="humidity"></span>%</p>
+        <p><span class="fw-bold">Wind:</span> <span id="wind"></span> m/s</p>
+      </div>
+
+      <!-- Forecast Section -->
+      <div id="forecast" class="mt-4 text-white">
+        <h4 class="fw-bold text-center fw-bold">5-Day Forecast</h4>
+        <div id="forecastCards" class="d-flex justify-content-center flex-wrap gap-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const OWM_KEY = "28b6843b2da8dc1973b442f62645dfcb";
+
+    const WEATHER_API = (city) =>
+      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&appid=${OWM_KEY}`;
+    const FORECAST_API = (city) =>
+      `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&units=metric&appid=${OWM_KEY}`;
+
+    const statusEl = document.getElementById("status");
+    const weatherEl = document.getElementById("weather");
+    const curTemp = document.getElementById("curTemp");
+    const curDesc = document.getElementById("curDesc");
+    const locationName = document.getElementById("locationName");
+    const humidity = document.getElementById("humidity");
+    const wind = document.getElementById("wind");
+    const forecastCards = document.getElementById("forecastCards");
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function displayWeather(data) {
+      weatherEl.style.display = "block";
+      curTemp.textContent = Math.round(data.main.temp) + "°C";
+      curDesc.textContent = data.weather[0].description;
+      locationName.textContent = `${data.name}, ${data.sys.country}`;
+      humidity.textContent = data.main.humidity;
+      wind.textContent = data.wind.speed;
+    }
+
+    function displayForecast(data) {
+      forecastCards.innerHTML = "";
+      
+      const daily = data.list.filter(item => item.dt_txt.includes("12:00:00"));
+
+      daily.forEach(day => {
+        const date = new Date(day.dt_txt);
+        const card = document.createElement("div");
+        card.className = "card  border border-light p-2 text-center text-dark fw-bold";
+        card.style.width = "120px";
+        card.innerHTML = `
+          <h6>${date.toLocaleDateString("en-US", { weekday: "short" })}</h6>
+          <img src="https://openweathermap.org/img/wn/${day.weather[0].icon}@2x.png" alt="${day.weather[0].description}">
+          <p class="mb-0">${Math.round(day.main.temp)}°C</p>
+          <small>${day.weather[0].description}</small>
+        `;
+        forecastCards.appendChild(card);
+      });
+    }
+
+    async function searchCity(city) {
+      if (!city) return setStatus("Please enter a city name.");
+      try {
+        setStatus("Fetching weather...");
+        const [weatherRes, forecastRes] = await Promise.all([
+          fetch(WEATHER_API(city)),
+          fetch(FORECAST_API(city))
+        ]);
+
+        if (!weatherRes.ok || !forecastRes.ok) throw new Error("Weather API error");
+
+        const weatherData = await weatherRes.json();
+        const forecastData = await forecastRes.json();
+
+        displayWeather(weatherData);
+        displayForecast(forecastData);
+        setStatus("");
+      } catch (err) {
+        setStatus("❌ Could not fetch weather — check API key or city.");
+      }
+    }
+
+    document.getElementById("searchBtn").addEventListener("click", () => {
+      searchCity(document.getElementById("cityInput").value.trim());
+    });
+
+    document.getElementById("locBtn").addEventListener("click", () => {
+      if (!navigator.geolocation) return setStatus("Geolocation not supported.");
+      setStatus("Getting your location...");
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const { latitude, longitude } = pos.coords;
+            const [weatherRes, forecastRes] = await Promise.all([
+              fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${OWM_KEY}`),
+              fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&units=metric&appid=${OWM_KEY}`)
+            ]);
+
+            const weatherData = await weatherRes.json();
+            const forecastData = await forecastRes.json();
+
+            displayWeather(weatherData);
+            displayForecast(forecastData);
+            setStatus("");
+          } catch {
+            setStatus("❌ Failed to fetch location weather.");
+          }
+        },
+        () => setStatus("Location access denied.")
+      );
+    });
+  </script>
+</body>
+</html>
